@@ -2,7 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
 import Toolbar from "../components/Toolbar";
 import socket from "../socket";
+function getUserColor(name = "") {
+  const colors = [
+    "#ef4444",
+    "#f97316",
+    "#eab308",
+    "#22c55e",
+    "#06b6d4",
+    "#3b82f6",
+    "#8b5cf6",
+    "#ec4899"
+  ];
 
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  return colors[Math.abs(hash) % colors.length];
+}
 export default function WhiteboardPage({ roomId, userName, onLeave }) {
   const canvasRef = useRef(null);
   const drawing = useRef(false);
@@ -729,7 +747,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                     width: "12px",
                     height: "12px",
                     borderRadius: "50%",
-                    background: "#ef4444",
+                    background: getUserColor(cursor.userName),
                     marginBottom: "4px"
                   }}
                 />
