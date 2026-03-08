@@ -8,6 +8,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   const drawing = useRef(false);
   const startPoint = useRef(null);
   const currentStroke = useRef([]);
+  const liveEmitTimeout = useRef(null);
 
   const [tool, setTool] = useState("pencil");
   const [color, setColor] = useState("#000000");
@@ -54,7 +55,9 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     });
 
     socket.on("live-drawing", (segment) => {
-      const ctx = canvasRef.current.getContext("2d");
+      const ctx = canvasRef.current?.getContext("2d");
+      if (!ctx) return;
+
       drawLine(
         ctx,
         segment.x0,
@@ -101,8 +104,37 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = darkMode ? "#0f172a" : "#ffffff";
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const bg = darkMode ? "#1e1b4b" : "#fff7ed";
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    drawKidsGrid(ctx, canvas.width, canvas.height);
+  };
+
+  const drawKidsGrid = (ctx, width, height) => {
+    ctx.save();
+    ctx.lineWidth = 1;
+
+    for (let x = 0; x < width; x += 40) {
+      ctx.strokeStyle = darkMode ? "rgba(255,255,255,0.06)" : "rgba(59,130,246,0.08)";
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+
+    for (let y = 0; y < height; y += 40) {
+      ctx.strokeStyle = darkMode ? "rgba(255,255,255,0.06)" : "rgba(236,72,153,0.08)";
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
+    ctx.restore();
   };
 
   const getPos = (e) => {
@@ -219,7 +251,21 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     socket.emit("save-element", { roomId, element });
   };
 
-  const handleMouseDown = (e) => {
+  const emitLiveSegment = (segment) => {
+    if (liveEmitTimeout.current) return;
+
+    liveEmitTimeout.current = setTimeout(() => {
+      socket.emit("live-drawing", segment);
+      liveEmitTimeout.current = null;
+    }, 12);
+  };
+
+  const handlePointerDown = (e) => {
+    e.preventDefault();
+    if (!canvasRef.current) return;
+
+    canvasRef.current.setPointerCapture?.(e.pointerId);
+
     const pos = getPos(e);
     startPoint.current = pos;
 
@@ -257,8 +303,10 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     drawing.current = true;
   };
 
-  const handleMouseMove = (e) => {
+  const handlePointerMove = (e) => {
+    e.preventDefault();
     const pos = getPos(e);
+
     setMyCursor({ x: pos.x, y: pos.y, visible: true });
     socket.emit("cursor-move", { roomId, userName, x: pos.x, y: pos.y });
 
@@ -269,12 +317,12 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     if (tool === "pencil" || tool === "eraser") {
       const ctx = canvasRef.current.getContext("2d");
       const last = currentStroke.current[currentStroke.current.length - 1];
-      const strokeColor = tool === "eraser" ? (darkMode ? "#0f172a" : "#ffffff") : color;
+      const strokeColor = tool === "eraser" ? (darkMode ? "#1e1b4b" : "#fff7ed") : color;
 
       drawLine(ctx, last.x, last.y, pos.x, pos.y, strokeColor, brushSize);
       currentStroke.current.push(pos);
 
-      socket.emit("live-drawing", {
+      emitLiveSegment({
         roomId,
         x0: last.x,
         y0: last.y,
@@ -352,7 +400,8 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     }
   };
 
-  const handleMouseUp = (e) => {
+  const handlePointerUp = (e) => {
+    e.preventDefault();
     if (!drawing.current) return;
     drawing.current = false;
 
@@ -365,7 +414,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
       saveElement({
         type: tool,
         points: currentStroke.current,
-        color: tool === "eraser" ? (darkMode ? "#0f172a" : "#ffffff") : color,
+        color: tool === "eraser" ? (darkMode ? "#1e1b4b" : "#fff7ed") : color,
         brushSize
       });
       currentStroke.current = [];
@@ -454,7 +503,6 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     setRedoStack((prev) => [...prev, removed]);
     setElements(updated);
     setPreviewElement(null);
-
     socket.emit("update-board", { roomId, elements: updated });
   };
 
@@ -468,7 +516,6 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     setRedoStack(updatedRedo);
     setElements(updatedElements);
     setPreviewElement(null);
-
     socket.emit("update-board", { roomId, elements: updatedElements });
   };
 
@@ -481,7 +528,6 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
 
   const handleLeave = () => {
     localStorage.removeItem("roomId");
-    localStorage.removeItem("userName");
     onLeave();
   };
 
@@ -513,7 +559,9 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     <div
       style={{
         minHeight: "100vh",
-        background: darkMode ? "#020617" : "#f3f4f6",
+        background: darkMode
+          ? "linear-gradient(135deg, #312e81 0%, #1e1b4b 35%, #0f172a 100%)"
+          : "linear-gradient(135deg, #fef3c7 0%, #dbeafe 30%, #fbcfe8 65%, #c7d2fe 100%)",
         padding: "18px",
         fontFamily: "Arial, sans-serif",
         color: darkMode ? "white" : "#111827"
@@ -529,19 +577,27 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
             alignItems: "start"
           }}
         >
-          <div>
+          <div
+            style={{
+              background: darkMode ? "rgba(15,23,42,0.6)" : "rgba(255,255,255,0.45)",
+              padding: "14px",
+              borderRadius: "18px",
+              backdropFilter: "blur(8px)"
+            }}
+          >
             <h2 style={{ margin: 0 }}>Room: {roomId}</h2>
-            <div style={{ fontWeight: "600", color: darkMode ? "#cbd5e1" : "#4b5563" }}>
+            <div style={{ fontWeight: "600", color: darkMode ? "#cbd5e1" : "#374151" }}>
               User: {userName}
             </div>
           </div>
 
           <div
             style={{
-              background: darkMode ? "#111827" : "white",
-              borderRadius: "14px",
+              background: darkMode ? "rgba(15,23,42,0.6)" : "rgba(255,255,255,0.55)",
+              borderRadius: "18px",
               padding: "12px",
               minWidth: "220px",
+              backdropFilter: "blur(8px)",
               boxShadow: "0 8px 24px rgba(0,0,0,0.08)"
             }}
           >
@@ -553,7 +609,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                   style={{
                     padding: "8px 10px",
                     borderRadius: "10px",
-                    background: darkMode ? "#1f2937" : "#f3f4f6",
+                    background: darkMode ? "#312e81" : "#eef2ff",
                     fontWeight: "600"
                   }}
                 >
@@ -565,10 +621,11 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
 
           <div
             style={{
-              background: darkMode ? "#111827" : "white",
-              borderRadius: "14px",
+              background: darkMode ? "rgba(15,23,42,0.6)" : "rgba(255,255,255,0.55)",
+              borderRadius: "18px",
               padding: "12px",
               minWidth: "260px",
+              backdropFilter: "blur(8px)",
               boxShadow: "0 8px 24px rgba(0,0,0,0.08)"
             }}
           >
@@ -586,7 +643,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                     padding: "10px",
                     border: "none",
                     borderRadius: "10px",
-                    background: darkMode ? "#1f2937" : "#eef2ff",
+                    background: darkMode ? "#312e81" : "#eef2ff",
                     color: darkMode ? "white" : "#111827",
                     cursor: "pointer",
                     fontWeight: "600"
@@ -624,16 +681,17 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
               width={1200}
               height={650}
               style={{
-                border: `2px solid ${darkMode ? "#334155" : "#111827"}`,
-                borderRadius: "14px",
-                background: darkMode ? "#0f172a" : "white",
+                border: `3px solid ${darkMode ? "#6366f1" : "#f59e0b"}`,
+                borderRadius: "22px",
+                background: darkMode ? "#1e1b4b" : "#fff7ed",
                 cursor: "crosshair",
-                boxShadow: "0 10px 25px rgba(0,0,0,0.08)"
+                boxShadow: "0 14px 34px rgba(0,0,0,0.14)",
+                touchAction: "none"
               }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={() => {
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={() => {
                 drawing.current = false;
                 setMyCursor((prev) => ({ ...prev, visible: false }));
               }}
@@ -648,7 +706,8 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                   width: brushSize,
                   height: brushSize,
                   borderRadius: "50%",
-                  border: "1px solid #2563eb",
+                  border: "2px solid #2563eb",
+                  background: "rgba(37,99,235,0.15)",
                   pointerEvents: "none"
                 }}
               />
@@ -667,8 +726,8 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
               >
                 <div
                   style={{
-                    width: "10px",
-                    height: "10px",
+                    width: "12px",
+                    height: "12px",
                     borderRadius: "50%",
                     background: "#ef4444",
                     marginBottom: "4px"
@@ -679,8 +738,8 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                     fontSize: "12px",
                     background: "#111827",
                     color: "white",
-                    padding: "2px 6px",
-                    borderRadius: "6px",
+                    padding: "3px 7px",
+                    borderRadius: "8px",
                     whiteSpace: "nowrap"
                   }}
                 >
