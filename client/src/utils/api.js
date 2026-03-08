@@ -1,5 +1,6 @@
 export const API_BASE =
-  import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+  import.meta.env.VITE_API_BASE ||
+  "https://realtime-whiteboard-m8bs.onrender.com/api";
 
 export async function apiPost(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
