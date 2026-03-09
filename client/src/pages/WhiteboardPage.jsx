@@ -33,6 +33,77 @@ const glassCard = {
   WebkitBackdropFilter: "blur(10px)"
 };
 
+function sanitizeElement(el) {
+  if (!el || typeof el !== "object") return null;
+
+  const safe = { ...el };
+
+  if (safe.type === "pencil" || safe.type === "eraser") {
+    safe.points = Array.isArray(safe.points)
+      ? safe.points.filter(
+          (p) => p && typeof p.x === "number" && typeof p.y === "number"
+        )
+      : [];
+
+    if (safe.points.length < 2) return null;
+  }
+
+  if (safe.type === "text") {
+    safe.text = typeof safe.text === "string" ? safe.text : "";
+    if (typeof safe.x !== "number" || typeof safe.y !== "number") return null;
+  }
+
+  if (safe.type === "sticky") {
+    safe.text = typeof safe.text === "string" ? safe.text : "";
+    if (typeof safe.x !== "number" || typeof safe.y !== "number") return null;
+  }
+
+  if (safe.type === "line") {
+    if (
+      typeof safe.x1 !== "number" ||
+      typeof safe.y1 !== "number" ||
+      typeof safe.x2 !== "number" ||
+      typeof safe.y2 !== "number"
+    ) {
+      return null;
+    }
+  }
+
+  if (safe.type === "rectangle" || safe.type === "square") {
+    if (
+      typeof safe.x !== "number" ||
+      typeof safe.y !== "number" ||
+      typeof safe.width !== "number" ||
+      typeof safe.height !== "number"
+    ) {
+      return null;
+    }
+  }
+
+  if (safe.type === "circle") {
+    if (
+      typeof safe.cx !== "number" ||
+      typeof safe.cy !== "number" ||
+      typeof safe.radius !== "number"
+    ) {
+      return null;
+    }
+  }
+
+  safe.color = typeof safe.color === "string" ? safe.color : "#000000";
+  safe.brushSize =
+    typeof safe.brushSize === "number" && !Number.isNaN(safe.brushSize)
+      ? safe.brushSize
+      : 4;
+
+  return safe;
+}
+
+function sanitizeElements(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(sanitizeElement).filter(Boolean);
+}
+
 export default function WhiteboardPage({ roomId, userName, onLeave }) {
   const canvasRef = useRef(null);
   const drawing = useRef(false);
@@ -52,10 +123,12 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   const [versions, setVersions] = useState([]);
 
   useEffect(() => {
+    if (!roomId || !userName) return;
+
     socket.emit("join-room", { roomId, user: userName });
 
     const onLoadBoard = (savedElements) => {
-      setElements(Array.isArray(savedElements) ? savedElements : []);
+      setElements(sanitizeElements(savedElements));
       setRedoStack([]);
       setPreviewElement(null);
     };
@@ -69,12 +142,13 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     };
 
     const onElementAdded = (element) => {
-      if (!element) return;
-      setElements((prev) => [...prev, element]);
+      const safeElement = sanitizeElement(element);
+      if (!safeElement) return;
+      setElements((prev) => [...prev, safeElement]);
     };
 
     const onBoardUpdated = (updatedElements) => {
-      setElements(Array.isArray(updatedElements) ? updatedElements : []);
+      setElements(sanitizeElements(updatedElements));
       setPreviewElement(null);
     };
 
@@ -88,21 +162,38 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
       const ctx = canvasRef.current?.getContext("2d");
       if (!ctx || !segment) return;
 
+      if (
+        typeof segment.x0 !== "number" ||
+        typeof segment.y0 !== "number" ||
+        typeof segment.x1 !== "number" ||
+        typeof segment.y1 !== "number"
+      ) {
+        return;
+      }
+
       drawLine(
         ctx,
         segment.x0,
         segment.y0,
         segment.x1,
         segment.y1,
-        segment.color,
-        segment.brushSize
+        typeof segment.color === "string" ? segment.color : "#000000",
+        typeof segment.brushSize === "number" ? segment.brushSize : 4
       );
     };
 
-    const onCursorMove = ({ socketId, userName, x, y }) => {
+    const onCursorMove = ({ socketId, userName: remoteUserName, x, y }) => {
+      if (
+        !socketId ||
+        typeof x !== "number" ||
+        typeof y !== "number"
+      ) {
+        return;
+      }
+
       setRemoteCursors((prev) => ({
         ...prev,
-        [socketId]: { userName, x, y }
+        [socketId]: { userName: remoteUserName || "User", x, y }
       }));
     };
 
@@ -195,7 +286,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     ctx.lineWidth = size;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.shadowBlur = dashed ? 0 : 0.5;
+    ctx.shadowBlur = 0.5;
     ctx.shadowColor = strokeColor;
     ctx.stroke();
     ctx.closePath();
@@ -276,8 +367,9 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     if (!el) return;
 
     if (el.type === "pencil" || el.type === "eraser") drawStroke(ctx, el, dashed);
-    if (el.type === "line")
+    if (el.type === "line") {
       drawLine(ctx, el.x1, el.y1, el.x2, el.y2, el.color, el.brushSize, dashed);
+    }
     if (el.type === "rectangle" || el.type === "square") drawRectangle(ctx, el, dashed);
     if (el.type === "circle") drawCircle(ctx, el, dashed);
     if (el.type === "text") drawText(ctx, el);
@@ -294,11 +386,13 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   };
 
   const saveElement = (element) => {
-    if (!element) return;
-    setElements((prev) => [...prev, element]);
+    const safeElement = sanitizeElement(element);
+    if (!safeElement) return;
+
+    setElements((prev) => [...prev, safeElement]);
     setRedoStack([]);
     setPreviewElement(null);
-    socket.emit("save-element", { roomId, element });
+    socket.emit("save-element", { roomId, element: safeElement });
   };
 
   const emitLiveSegment = (segment) => {
@@ -365,10 +459,13 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     if (!drawing.current) return;
 
     const start = startPoint.current;
+    if (!start) return;
 
     if (tool === "pencil" || tool === "eraser") {
       const ctx = canvasRef.current.getContext("2d");
       const last = currentStroke.current[currentStroke.current.length - 1];
+      if (!last) return;
+
       const strokeColor = tool === "eraser" ? "#f8fafc" : color;
 
       drawLine(ctx, last.x, last.y, pos.x, pos.y, strokeColor, brushSize);
@@ -459,9 +556,13 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
 
     const end = getPos(e);
     const start = startPoint.current;
+    if (!start) return;
 
     if (tool === "pencil" || tool === "eraser") {
-      if (!currentStroke.current || currentStroke.current.length < 2) return;
+      if (!currentStroke.current || currentStroke.current.length < 2) {
+        currentStroke.current = [];
+        return;
+      }
 
       saveElement({
         type: tool,
@@ -587,7 +688,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     if (!canvasRef.current) return;
     const url = canvasRef.current.toDataURL("image/png");
     const link = document.createElement("a");
-    link.download = `${roomId}.png`;
+    link.download = `${roomId || "whiteboard"}.png`;
     link.href = url;
     link.click();
   };
@@ -597,7 +698,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     const pdf = new jsPDF("landscape", "mm", "a4");
     const imgData = canvasRef.current.toDataURL("image/png");
     pdf.addImage(imgData, "PNG", 10, 10, 277, 180);
-    pdf.save(`${roomId}.pdf`);
+    pdf.save(`${roomId || "whiteboard"}.pdf`);
   };
 
   const handleSaveVersion = () => {
@@ -637,7 +738,9 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
           }}
         >
           <div style={glassCard}>
-            <h2 style={{ margin: 0, color: "#4b5563" }}>Room: {roomId}</h2>
+            <h2 style={{ margin: 0, color: "#4b5563" }}>
+              Room: {roomId || "N/A"}
+            </h2>
 
             <div
               style={{
@@ -662,9 +765,9 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                   fontWeight: "700"
                 }}
               >
-                {userName?.charAt(0)?.toUpperCase()}
+                {userName?.charAt(0)?.toUpperCase() || "U"}
               </div>
-              <span>User: {userName}</span>
+              <span>User: {userName || "User"}</span>
             </div>
           </div>
 
@@ -837,6 +940,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
               onPointerUp={handlePointerUp}
               onPointerLeave={() => {
                 drawing.current = false;
+                currentStroke.current = [];
                 setMyCursor((prev) => ({ ...prev, visible: false }));
               }}
             />
