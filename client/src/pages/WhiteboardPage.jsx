@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
-import Toolbar from "../components/Toolbar";
 import socket from "../socket";
 
 function getUserColor(name = "") {
@@ -23,6 +22,17 @@ function getUserColor(name = "") {
   return colors[Math.abs(hash) % colors.length];
 }
 
+const glassCard = {
+  background:
+    "linear-gradient(135deg, rgba(255,255,255,0.72), rgba(240,240,240,0.58))",
+  padding: "14px",
+  borderRadius: "18px",
+  border: "1px solid rgba(255,255,255,0.45)",
+  boxShadow: "0 20px 40px rgba(0,0,0,0.10)",
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)"
+};
+
 export default function WhiteboardPage({ roomId, userName, onLeave }) {
   const canvasRef = useRef(null);
   const drawing = useRef(false);
@@ -39,44 +49,44 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   const [participants, setParticipants] = useState([]);
   const [remoteCursors, setRemoteCursors] = useState({});
   const [myCursor, setMyCursor] = useState({ x: 0, y: 0, visible: false });
-  const [darkMode, setDarkMode] = useState(false);
   const [versions, setVersions] = useState([]);
 
   useEffect(() => {
     socket.emit("join-room", { roomId, user: userName });
 
-    socket.on("load-board", (savedElements) => {
-      setElements(savedElements || []);
+    const onLoadBoard = (savedElements) => {
+      setElements(Array.isArray(savedElements) ? savedElements : []);
       setRedoStack([]);
       setPreviewElement(null);
-    });
+    };
 
-    socket.on("versions-update", (savedVersions) => {
-      setVersions(savedVersions || []);
-    });
+    const onVersionsUpdate = (savedVersions) => {
+      setVersions(Array.isArray(savedVersions) ? savedVersions : []);
+    };
 
-    socket.on("participants-update", (users) => {
-      setParticipants(users || []);
-    });
+    const onParticipantsUpdate = (users) => {
+      setParticipants(Array.isArray(users) ? users : []);
+    };
 
-    socket.on("element-added", (element) => {
+    const onElementAdded = (element) => {
+      if (!element) return;
       setElements((prev) => [...prev, element]);
-    });
+    };
 
-    socket.on("board-updated", (updatedElements) => {
-      setElements(updatedElements || []);
+    const onBoardUpdated = (updatedElements) => {
+      setElements(Array.isArray(updatedElements) ? updatedElements : []);
       setPreviewElement(null);
-    });
+    };
 
-    socket.on("clear-board", () => {
+    const onClearBoard = () => {
       setElements([]);
       setRedoStack([]);
       setPreviewElement(null);
-    });
+    };
 
-    socket.on("live-drawing", (segment) => {
+    const onLiveDrawing = (segment) => {
       const ctx = canvasRef.current?.getContext("2d");
-      if (!ctx) return;
+      if (!ctx || !segment) return;
 
       drawLine(
         ctx,
@@ -87,48 +97,59 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
         segment.color,
         segment.brushSize
       );
-    });
+    };
 
-    socket.on("cursor-move", ({ socketId, userName, x, y }) => {
+    const onCursorMove = ({ socketId, userName, x, y }) => {
       setRemoteCursors((prev) => ({
         ...prev,
         [socketId]: { userName, x, y }
       }));
-    });
+    };
 
-    socket.on("cursor-remove", (socketId) => {
+    const onCursorRemove = (socketId) => {
       setRemoteCursors((prev) => {
         const copy = { ...prev };
         delete copy[socketId];
         return copy;
       });
-    });
+    };
+
+    socket.on("load-board", onLoadBoard);
+    socket.on("versions-update", onVersionsUpdate);
+    socket.on("participants-update", onParticipantsUpdate);
+    socket.on("element-added", onElementAdded);
+    socket.on("board-updated", onBoardUpdated);
+    socket.on("clear-board", onClearBoard);
+    socket.on("live-drawing", onLiveDrawing);
+    socket.on("cursor-move", onCursorMove);
+    socket.on("cursor-remove", onCursorRemove);
 
     return () => {
-      socket.off("load-board");
-      socket.off("versions-update");
-      socket.off("participants-update");
-      socket.off("element-added");
-      socket.off("board-updated");
-      socket.off("clear-board");
-      socket.off("live-drawing");
-      socket.off("cursor-move");
-      socket.off("cursor-remove");
+      socket.off("load-board", onLoadBoard);
+      socket.off("versions-update", onVersionsUpdate);
+      socket.off("participants-update", onParticipantsUpdate);
+      socket.off("element-added", onElementAdded);
+      socket.off("board-updated", onBoardUpdated);
+      socket.off("clear-board", onClearBoard);
+      socket.off("live-drawing", onLiveDrawing);
+      socket.off("cursor-move", onCursorMove);
+      socket.off("cursor-remove", onCursorRemove);
     };
   }, [roomId, userName]);
 
   useEffect(() => {
-    redrawAll(elements, previewElement);
-  }, [elements, previewElement, darkMode]);
+    if (!canvasRef.current) return;
+    redrawAll(Array.isArray(elements) ? elements : [], previewElement);
+  }, [elements, previewElement]);
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+    if (!canvas) return;
 
+    const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const bg = darkMode ? "#f3f4f6" : "#f8fafc";
-    ctx.fillStyle = bg;
+    ctx.fillStyle = "#f8fafc";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     drawSoftGrid(ctx, canvas.width, canvas.height);
@@ -235,7 +256,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   };
 
   const drawStroke = (ctx, el, dashed = false) => {
-    if (!el.points || el.points.length < 2) return;
+    if (!el?.points || !Array.isArray(el.points) || el.points.length < 2) return;
 
     for (let i = 1; i < el.points.length; i++) {
       drawLine(
@@ -252,8 +273,11 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   };
 
   const drawElement = (ctx, el, dashed = false) => {
+    if (!el) return;
+
     if (el.type === "pencil" || el.type === "eraser") drawStroke(ctx, el, dashed);
-    if (el.type === "line") drawLine(ctx, el.x1, el.y1, el.x2, el.y2, el.color, el.brushSize, dashed);
+    if (el.type === "line")
+      drawLine(ctx, el.x1, el.y1, el.x2, el.y2, el.color, el.brushSize, dashed);
     if (el.type === "rectangle" || el.type === "square") drawRectangle(ctx, el, dashed);
     if (el.type === "circle") drawCircle(ctx, el, dashed);
     if (el.type === "text") drawText(ctx, el);
@@ -262,12 +286,15 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
 
   const redrawAll = (allElements, preview = null) => {
     clearCanvas();
-    const ctx = canvasRef.current.getContext("2d");
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+
     allElements.forEach((el) => drawElement(ctx, el, false));
     if (preview) drawElement(ctx, preview, true);
   };
 
   const saveElement = (element) => {
+    if (!element) return;
     setElements((prev) => [...prev, element]);
     setRedoStack([]);
     setPreviewElement(null);
@@ -328,6 +355,8 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
 
   const handlePointerMove = (e) => {
     e.preventDefault();
+    if (!canvasRef.current) return;
+
     const pos = getPos(e);
 
     setMyCursor({ x: pos.x, y: pos.y, visible: true });
@@ -432,7 +461,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     const start = startPoint.current;
 
     if (tool === "pencil" || tool === "eraser") {
-      if (currentStroke.current.length < 2) return;
+      if (!currentStroke.current || currentStroke.current.length < 2) return;
 
       saveElement({
         type: tool,
@@ -518,9 +547,11 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   };
 
   const handleUndo = () => {
-    if (elements.length === 0) return;
+    if (!Array.isArray(elements) || elements.length === 0) return;
+
     const updated = [...elements];
     const removed = updated.pop();
+
     setRedoStack((prev) => [...prev, removed]);
     setElements(updated);
     setPreviewElement(null);
@@ -528,10 +559,12 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   };
 
   const handleRedo = () => {
-    if (redoStack.length === 0) return;
+    if (!Array.isArray(redoStack) || redoStack.length === 0) return;
+
     const updatedRedo = [...redoStack];
     const restored = updatedRedo.pop();
     const updatedElements = [...elements, restored];
+
     setRedoStack(updatedRedo);
     setElements(updatedElements);
     setPreviewElement(null);
@@ -551,6 +584,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   };
 
   const handleExportPNG = () => {
+    if (!canvasRef.current) return;
     const url = canvasRef.current.toDataURL("image/png");
     const link = document.createElement("a");
     link.download = `${roomId}.png`;
@@ -559,6 +593,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   };
 
   const handleExportPDF = () => {
+    if (!canvasRef.current) return;
     const pdf = new jsPDF("landscape", "mm", "a4");
     const imgData = canvasRef.current.toDataURL("image/png");
     pdf.addImage(imgData, "PNG", 10, 10, 277, 180);
@@ -573,6 +608,9 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   const handleRestoreVersion = (index) => {
     socket.emit("restore-version", { roomId, versionIndex: index });
   };
+
+  const safeParticipants = Array.isArray(participants) ? participants : [];
+  const safeVersions = Array.isArray(versions) ? versions : [];
 
   return (
     <div
@@ -598,9 +636,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
             alignItems: "start"
           }}
         >
-          <div
-            style={glassCard}
-          >
+          <div style={glassCard}>
             <h2 style={{ margin: 0, color: "#4b5563" }}>Room: {roomId}</h2>
 
             <div
@@ -637,7 +673,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
               Participants
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {participants.map((name, index) => (
+              {safeParticipants.map((name, index) => (
                 <div
                   key={`${name}-${index}`}
                   style={{
@@ -677,10 +713,10 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                 overflowY: "auto"
               }}
             >
-              {versions.length === 0 && (
+              {safeVersions.length === 0 && (
                 <div style={{ color: "#6b7280" }}>No snapshots yet</div>
               )}
-              {versions.map((version, index) => (
+              {safeVersions.map((version, index) => (
                 <button
                   key={index}
                   onClick={() => handleRestoreVersion(index)}
@@ -702,27 +738,87 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
           </div>
         </div>
 
-        <div style={glassCard}>
-          <Toolbar
-            tool={tool}
-            setTool={setTool}
-            color={color}
-            setColor={setColor}
-            brushSize={brushSize}
-            setBrushSize={setBrushSize}
-            onUndo={handleUndo}
-            onRedo={handleRedo}
-            onClear={handleClear}
-            onLeave={handleLeave}
-            onExportPNG={handleExportPNG}
-            onExportPDF={handleExportPDF}
-            onSaveVersion={handleSaveVersion}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
-          />
+        <div style={{ ...glassCard, marginBottom: "14px" }}>
+          <div style={{ fontWeight: 700, color: "#4b5563", marginBottom: "10px" }}>
+            Tools
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
+            {["pencil", "eraser", "text", "sticky", "line", "rectangle", "square", "circle"].map((item) => (
+              <button
+                key={item}
+                onClick={() => setTool(item)}
+                style={{
+                  border: "1px solid rgba(107,114,128,0.14)",
+                  borderRadius: "10px",
+                  padding: "8px 12px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  color: tool === item ? "white" : "#4b5563",
+                  background: tool === item ? "#4b5563" : "rgba(255,255,255,0.45)",
+                  cursor: "pointer"
+                }}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
+            <label style={{ fontSize: "13px", fontWeight: 700, color: "#4b5563" }}>
+              Color
+            </label>
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              style={{ width: "42px", height: "32px", border: "none", background: "transparent", cursor: "pointer" }}
+            />
+
+            <label style={{ fontSize: "13px", fontWeight: 700, color: "#4b5563" }}>
+              Size
+            </label>
+            <input
+              type="range"
+              min="2"
+              max="16"
+              value={brushSize}
+              onChange={(e) => setBrushSize(Number(e.target.value))}
+            />
+            <span style={{ fontSize: "13px", color: "#6b7280" }}>{brushSize}px</span>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+            {[
+              { label: "Undo", onClick: handleUndo },
+              { label: "Redo", onClick: handleRedo },
+              { label: "Clear", onClick: handleClear },
+              { label: "Export PNG", onClick: handleExportPNG },
+              { label: "Export PDF", onClick: handleExportPDF },
+              { label: "Save Snapshot", onClick: handleSaveVersion },
+              { label: "Leave Room", onClick: handleLeave }
+            ].map((btn) => (
+              <button
+                key={btn.label}
+                onClick={btn.onClick}
+                style={{
+                  border: "1px solid rgba(107,114,128,0.14)",
+                  borderRadius: "10px",
+                  padding: "10px 12px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  color: btn.label === "Leave Room" ? "white" : "#4b5563",
+                  background: btn.label === "Leave Room" ? "#ef4444" : "rgba(255,255,255,0.45)",
+                  cursor: "pointer"
+                }}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "14px" }}>
+        <div style={{ display: "flex", justifyContent: "center" }}>
           <div style={{ position: "relative" }}>
             <canvas
               ref={canvasRef}
@@ -755,7 +851,8 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                   height: brushSize,
                   borderRadius: "50%",
                   border: `2px solid ${tool === "eraser" ? "#111827" : color}`,
-                  background: tool === "eraser" ? "rgba(17,24,39,0.12)" : `${color}33`,
+                  background:
+                    tool === "eraser" ? "rgba(17,24,39,0.12)" : `${color}33`,
                   pointerEvents: "none"
                 }}
               />
@@ -801,13 +898,3 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     </div>
   );
 }
-
-const glassCard = {
-  background: "linear-gradient(135deg, rgba(255,255,255,0.72), rgba(240,240,240,0.58))",
-  padding: "14px",
-  borderRadius: "18px",
-  border: "1px solid rgba(255,255,255,0.45)",
-  boxShadow: "0 20px 40px rgba(0,0,0,0.10)",
-  backdropFilter: "blur(10px)",
-  WebkitBackdropFilter: "blur(10px)"
-};
