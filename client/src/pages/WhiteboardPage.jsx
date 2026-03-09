@@ -127,21 +127,19 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const bg = darkMode ? "#1e1b4b" : "#fff7ed";
+    const bg = darkMode ? "#f3f4f6" : "#f8fafc";
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    drawKidsGrid(ctx, canvas.width, canvas.height);
+    drawSoftGrid(ctx, canvas.width, canvas.height);
   };
 
-  const drawKidsGrid = (ctx, width, height) => {
+  const drawSoftGrid = (ctx, width, height) => {
     ctx.save();
     ctx.lineWidth = 1;
 
     for (let x = 0; x < width; x += 40) {
-      ctx.strokeStyle = darkMode
-        ? "rgba(255,255,255,0.06)"
-        : "rgba(59,130,246,0.08)";
+      ctx.strokeStyle = "rgba(156,163,175,0.08)";
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, height);
@@ -149,9 +147,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     }
 
     for (let y = 0; y < height; y += 40) {
-      ctx.strokeStyle = darkMode
-        ? "rgba(255,255,255,0.06)"
-        : "rgba(236,72,153,0.08)";
+      ctx.strokeStyle = "rgba(156,163,175,0.08)";
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(width, y);
@@ -169,16 +165,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     };
   };
 
-  const drawLine = (
-    ctx,
-    x0,
-    y0,
-    x1,
-    y1,
-    strokeColor,
-    size,
-    dashed = false
-  ) => {
+  const drawLine = (ctx, x0, y0, x1, y1, strokeColor, size, dashed = false) => {
     ctx.beginPath();
     ctx.setLineDash(dashed ? [6, 4] : []);
     ctx.moveTo(x0, y0);
@@ -265,21 +252,9 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
   };
 
   const drawElement = (ctx, el, dashed = false) => {
-    if (el.type === "pencil" || el.type === "eraser")
-      drawStroke(ctx, el, dashed);
-    if (el.type === "line")
-      drawLine(
-        ctx,
-        el.x1,
-        el.y1,
-        el.x2,
-        el.y2,
-        el.color,
-        el.brushSize,
-        dashed
-      );
-    if (el.type === "rectangle" || el.type === "square")
-      drawRectangle(ctx, el, dashed);
+    if (el.type === "pencil" || el.type === "eraser") drawStroke(ctx, el, dashed);
+    if (el.type === "line") drawLine(ctx, el.x1, el.y1, el.x2, el.y2, el.color, el.brushSize, dashed);
+    if (el.type === "rectangle" || el.type === "square") drawRectangle(ctx, el, dashed);
     if (el.type === "circle") drawCircle(ctx, el, dashed);
     if (el.type === "text") drawText(ctx, el);
     if (el.type === "sticky") drawSticky(ctx, el, dashed);
@@ -365,8 +340,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     if (tool === "pencil" || tool === "eraser") {
       const ctx = canvasRef.current.getContext("2d");
       const last = currentStroke.current[currentStroke.current.length - 1];
-      const strokeColor =
-        tool === "eraser" ? (darkMode ? "#1e1b4b" : "#fff7ed") : color;
+      const strokeColor = tool === "eraser" ? "#f8fafc" : color;
 
       drawLine(ctx, last.x, last.y, pos.x, pos.y, strokeColor, brushSize);
       currentStroke.current.push(pos);
@@ -411,10 +385,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     }
 
     if (tool === "square") {
-      const side = Math.max(
-        Math.abs(pos.x - start.x),
-        Math.abs(pos.y - start.y)
-      );
+      const side = Math.max(Math.abs(pos.x - start.x), Math.abs(pos.y - start.y));
       setPreviewElement({
         type: "square",
         x: pos.x >= start.x ? start.x : start.x - side,
@@ -466,7 +437,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
       saveElement({
         type: tool,
         points: currentStroke.current,
-        color: tool === "eraser" ? (darkMode ? "#1e1b4b" : "#fff7ed") : color,
+        color: tool === "eraser" ? "#f8fafc" : color,
         brushSize
       });
       currentStroke.current = [];
@@ -500,10 +471,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     }
 
     if (tool === "square") {
-      const side = Math.max(
-        Math.abs(end.x - start.x),
-        Math.abs(end.y - start.y)
-      );
+      const side = Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y));
       saveElement({
         type: "square",
         x: end.x >= start.x ? start.x : start.x - side,
@@ -551,10 +519,8 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
 
   const handleUndo = () => {
     if (elements.length === 0) return;
-
     const updated = [...elements];
     const removed = updated.pop();
-
     setRedoStack((prev) => [...prev, removed]);
     setElements(updated);
     setPreviewElement(null);
@@ -563,11 +529,9 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
 
   const handleRedo = () => {
     if (redoStack.length === 0) return;
-
     const updatedRedo = [...redoStack];
     const restored = updatedRedo.pop();
     const updatedElements = [...elements, restored];
-
     setRedoStack(updatedRedo);
     setElements(updatedElements);
     setPreviewElement(null);
@@ -614,12 +578,14 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     <div
       style={{
         minHeight: "100vh",
-        background: darkMode
-          ? "linear-gradient(135deg, #312e81 0%, #1e1b4b 35%, #0f172a 100%)"
-          : "linear-gradient(135deg, #fef3c7 0%, #dbeafe 30%, #fbcfe8 65%, #c7d2fe 100%)",
         padding: "18px",
         fontFamily: "Arial, sans-serif",
-        color: darkMode ? "white" : "#111827"
+        color: "#3f3f46",
+        backgroundColor: "#f4f4f8",
+        backgroundImage:
+          "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg fill='none' stroke='%23b8b8c7' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' opacity='0.8'%3E%3Cpath d='M20 30l30-10 20 20-20 20z'/%3E%3Cpath d='M95 20l18 40 24-30'/%3E%3Cpath d='M150 18c18 8 24 30 10 42-14 12-32 6-38-8-6-14 4-30 28-34z'/%3E%3Cpath d='M22 98c30-18 46 16 20 24-26 8-26 30-4 34'/%3E%3Cpath d='M80 88l0 48'/%3E%3Cpath d='M65 112h30'/%3E%3Cpath d='M118 90l34 34'/%3E%3Cpath d='M152 90l-34 34'/%3E%3Cpath d='M180 84c12 10 14 24 4 34-10 10-26 8-34-2-8-10-4-24 8-32 8-6 14-6 22 0z'/%3E%3Cpath d='M12 162l20 22 34-10-10-28z'/%3E%3Cpath d='M82 154l10 38 18-30 18 24'/%3E%3Cpath d='M150 154c18-6 34 4 36 20 2 16-10 28-30 28-20 0-34-12-32-26 2-14 10-18 26-22z'/%3E%3Cpath d='M180 150l0 42'/%3E%3Cpath d='M168 170h24'/%3E%3C/g%3E%3C/svg%3E\")",
+        backgroundRepeat: "repeat",
+        backgroundSize: "220px 220px"
       }}
     >
       <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
@@ -633,16 +599,9 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
           }}
         >
           <div
-            style={{
-              background: darkMode
-                ? "rgba(15,23,42,0.6)"
-                : "rgba(255,255,255,0.45)",
-              padding: "14px",
-              borderRadius: "18px",
-              backdropFilter: "blur(8px)"
-            }}
+            style={glassCard}
           >
-            <h2 style={{ margin: 0 }}>Room: {roomId}</h2>
+            <h2 style={{ margin: 0, color: "#4b5563" }}>Room: {roomId}</h2>
 
             <div
               style={{
@@ -651,7 +610,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                 alignItems: "center",
                 gap: "10px",
                 fontWeight: "600",
-                color: darkMode ? "#cbd5e1" : "#374151"
+                color: "#6b7280"
               }}
             >
               <div
@@ -673,35 +632,18 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
             </div>
           </div>
 
-          <div
-            style={{
-              background: darkMode
-                ? "rgba(15,23,42,0.6)"
-                : "rgba(255,255,255,0.55)",
-              borderRadius: "18px",
-              padding: "12px",
-              minWidth: "220px",
-              backdropFilter: "blur(8px)",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.08)"
-            }}
-          >
-            <div style={{ fontWeight: "700", marginBottom: "8px" }}>
+          <div style={{ ...glassCard, minWidth: "220px" }}>
+            <div style={{ fontWeight: "700", marginBottom: "8px", color: "#4b5563" }}>
               Participants
             </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px"
-              }}
-            >
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {participants.map((name, index) => (
                 <div
                   key={`${name}-${index}`}
                   style={{
                     padding: "8px 10px",
                     borderRadius: "12px",
-                    background: darkMode ? "#312e81" : "#eef2ff",
+                    background: "rgba(255,255,255,0.45)",
                     fontWeight: "600",
                     display: "flex",
                     alignItems: "center",
@@ -722,19 +664,8 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
             </div>
           </div>
 
-          <div
-            style={{
-              background: darkMode
-                ? "rgba(15,23,42,0.6)"
-                : "rgba(255,255,255,0.55)",
-              borderRadius: "18px",
-              padding: "12px",
-              minWidth: "260px",
-              backdropFilter: "blur(8px)",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.08)"
-            }}
-          >
-            <div style={{ fontWeight: "700", marginBottom: "8px" }}>
+          <div style={{ ...glassCard, minWidth: "260px" }}>
+            <div style={{ fontWeight: "700", marginBottom: "8px", color: "#4b5563" }}>
               Snapshots
             </div>
             <div
@@ -747,9 +678,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
               }}
             >
               {versions.length === 0 && (
-                <div style={{ color: darkMode ? "#cbd5e1" : "#6b7280" }}>
-                  No snapshots yet
-                </div>
+                <div style={{ color: "#6b7280" }}>No snapshots yet</div>
               )}
               {versions.map((version, index) => (
                 <button
@@ -760,8 +689,8 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                     padding: "10px",
                     border: "none",
                     borderRadius: "10px",
-                    background: darkMode ? "#312e81" : "#eef2ff",
-                    color: darkMode ? "white" : "#111827",
+                    background: "rgba(255,255,255,0.45)",
+                    color: "#374151",
                     cursor: "pointer",
                     fontWeight: "600"
                   }}
@@ -773,34 +702,36 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
           </div>
         </div>
 
-        <Toolbar
-          tool={tool}
-          setTool={setTool}
-          color={color}
-          setColor={setColor}
-          brushSize={brushSize}
-          setBrushSize={setBrushSize}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          onClear={handleClear}
-          onLeave={handleLeave}
-          onExportPNG={handleExportPNG}
-          onExportPDF={handleExportPDF}
-          onSaveVersion={handleSaveVersion}
-          darkMode={darkMode}
-          setDarkMode={setDarkMode}
-        />
+        <div style={glassCard}>
+          <Toolbar
+            tool={tool}
+            setTool={setTool}
+            color={color}
+            setColor={setColor}
+            brushSize={brushSize}
+            setBrushSize={setBrushSize}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            onClear={handleClear}
+            onLeave={handleLeave}
+            onExportPNG={handleExportPNG}
+            onExportPDF={handleExportPDF}
+            onSaveVersion={handleSaveVersion}
+            darkMode={darkMode}
+            setDarkMode={setDarkMode}
+          />
+        </div>
 
-        <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginTop: "14px" }}>
           <div style={{ position: "relative" }}>
             <canvas
               ref={canvasRef}
               width={1200}
               height={650}
               style={{
-                border: `3px solid ${darkMode ? "#6366f1" : "#f59e0b"}`,
+                border: "2px solid rgba(107,114,128,0.18)",
                 borderRadius: "22px",
-                background: darkMode ? "#1e1b4b" : "#fff7ed",
+                background: "#f8fafc",
                 cursor: "crosshair",
                 boxShadow: "0 14px 34px rgba(0,0,0,0.14)",
                 touchAction: "none"
@@ -824,10 +755,7 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
                   height: brushSize,
                   borderRadius: "50%",
                   border: `2px solid ${tool === "eraser" ? "#111827" : color}`,
-                  background:
-                    tool === "eraser"
-                      ? "rgba(17,24,39,0.12)"
-                      : `${color}33`,
+                  background: tool === "eraser" ? "rgba(17,24,39,0.12)" : `${color}33`,
                   pointerEvents: "none"
                 }}
               />
@@ -873,3 +801,13 @@ export default function WhiteboardPage({ roomId, userName, onLeave }) {
     </div>
   );
 }
+
+const glassCard = {
+  background: "linear-gradient(135deg, rgba(255,255,255,0.72), rgba(240,240,240,0.58))",
+  padding: "14px",
+  borderRadius: "18px",
+  border: "1px solid rgba(255,255,255,0.45)",
+  boxShadow: "0 20px 40px rgba(0,0,0,0.10)",
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)"
+};

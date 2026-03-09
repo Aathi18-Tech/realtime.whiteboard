@@ -1,12 +1,26 @@
 import { useState } from "react";
-import { apiPost } from "../api"; // if your file is in utils, change to ../utils/api
+import { apiPost } from "../utils/api";
 
 const doodleBg = `
   url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg fill='none' stroke='%23b8b8c7' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' opacity='0.8'%3E%3Cpath d='M20 30l30-10 20 20-20 20z'/%3E%3Cpath d='M95 20l18 40 24-30'/%3E%3Cpath d='M150 18c18 8 24 30 10 42-14 12-32 6-38-8-6-14 4-30 28-34z'/%3E%3Cpath d='M22 98c30-18 46 16 20 24-26 8-26 30-4 34'/%3E%3Cpath d='M80 88l0 48'/%3E%3Cpath d='M65 112h30'/%3E%3Cpath d='M118 90l34 34'/%3E%3Cpath d='M152 90l-34 34'/%3E%3Cpath d='M180 84c12 10 14 24 4 34-10 10-26 8-34-2-8-10-4-24 8-32 8-6 14-6 22 0z'/%3E%3Cpath d='M12 162l20 22 34-10-10-28z'/%3E%3Cpath d='M82 154l10 38 18-30 18 24'/%3E%3Cpath d='M150 154c18-6 34 4 36 20 2 16-10 28-30 28-20 0-34-12-32-26 2-14 10-18 26-22z'/%3E%3Cpath d='M180 150l0 42'/%3E%3Cpath d='M168 170h24'/%3E%3C/g%3E%3C/svg%3E")
 `;
 
+const inputStyle = {
+  width: "100%",
+  marginBottom: "12px",
+  padding: "12px 14px",
+  borderRadius: "10px",
+  border: "1px solid rgba(156,163,175,0.25)",
+  outline: "none",
+  fontSize: "14px",
+  background: "rgba(255,255,255,0.42)",
+  color: "#374151",
+  boxSizing: "border-box",
+  backdropFilter: "blur(6px)"
+};
+
 export default function AuthPage({ onAuthSuccess }) {
-  const [isLogin, setIsLogin] = useState(false);
+  const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -90,7 +104,7 @@ export default function AuthPage({ onAuthSuccess }) {
               color: "#4b5563"
             }}
           >
-            {isLogin ? `Welcome Back` : `Create Account`}
+            {isLogin ? "Welcome Back" : "Create Account"}
           </h1>
 
           <p
@@ -103,7 +117,7 @@ export default function AuthPage({ onAuthSuccess }) {
           >
             {isLogin
               ? "Login with your existing account"
-              : "Join or create a collaborative whiteboard room."}
+              : "Create your account and start using the whiteboard"}
           </p>
 
           <form onSubmit={handleSubmit}>
@@ -198,17 +212,3 @@ export default function AuthPage({ onAuthSuccess }) {
     </div>
   );
 }
-
-const inputStyle = {
-  width: "100%",
-  marginBottom: "12px",
-  padding: "12px 14px",
-  borderRadius: "10px",
-  border: "1px solid rgba(156,163,175,0.25)",
-  outline: "none",
-  fontSize: "14px",
-  background: "rgba(255,255,255,0.42)",
-  color: "#374151",
-  boxSizing: "border-box",
-  backdropFilter: "blur(6px)"
-};
